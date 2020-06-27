@@ -46,7 +46,11 @@ class MainModule(context: ApplicationLoader.Context)
   val password: String = dbUri.getUserInfo.split(":")(1)
   val host: String = dbUri.getHost
   val port: Int = dbUri.getPort
-  val databaseName: String = dbUri.getPath
+
+  val databaseName: String = dbUri.getPath match {
+    case path if path.startsWith("/") => dbUri.getPath.drop(1)
+    case path                         => path
+  }
 
   val pgDataSource = new org.postgresql.ds.PGSimpleDataSource()
   pgDataSource.setDatabaseName(databaseName)
