@@ -8,7 +8,7 @@ import exceptions.UserNotFound
 import io.circe.generic.auto._
 import io.circe.parser
 import io.circe.syntax._
-import models.{GoogleSignedInUser, UserEmailAndAccessToken, UserRegistrationDetails}
+import models.{GSignInEmail, UserEmailAndAccessToken, UserRegistrationDetails}
 import monix.eval.Task
 import monix.execution.Scheduler
 import play.api.Environment
@@ -71,7 +71,7 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
     }.runToFuture
   }
 
-  private def verify(info: UserEmailAndAccessToken): Task[GoogleSignedInUser] =
+  private def verify(info: UserEmailAndAccessToken): Task[GSignInEmail] =
     Task
       .fromFuture {
         wsClient
@@ -82,15 +82,15 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
             res.status match {
               case status if status >= 200 && status < 400 =>
                 parser
-                  .decode[GoogleSignedInUser](res.body)
+                  .decode[GSignInEmail](res.body)
                   .fold(_ => Future.failed(new Exception("Json parsing failed")), Future.successful)
               case _ => Future.failed(UserNotFound)
             }
           }
       }
       .flatMap {
-        case gsu @ GoogleSignedInUser(email, _) if email == info.email => Task.now(gsu)
-        case _                                                         => Task.raiseError(UserNotFound)
+        case gsu @ GSignInEmail(email, _) if email == info.email => Task.now(gsu)
+        case _                                                   => Task.raiseError(UserNotFound)
       }
 
 }
