@@ -16,10 +16,11 @@ import play.filters.cors.{CORSConfig, CORSFilter}
 import play.filters.gzip.{GzipFilter, GzipFilterConfig}
 import play.filters.hosts.{AllowedHostsConfig, AllowedHostsFilter}
 
-class PlayModule(context: ApplicationLoader.Context)
+class MainModule(context: ApplicationLoader.Context)
     extends BuiltInComponentsFromContext(context)
     with AssetsComponents {
 
+  val logger = Logger("MainModule")
   val corsFilter = new CORSFilter(CORSConfig.fromConfiguration(configuration))
   val gzipFilter = new GzipFilter(GzipFilterConfig.fromConfiguration(configuration))
 
@@ -45,12 +46,15 @@ class PlayModule(context: ApplicationLoader.Context)
   val password: String = dbUri.getUserInfo.split(":")(1)
   val host: String = dbUri.getHost
   val port: Int = dbUri.getPort
+  val databaseName: String = dbUri.getPath
 
   val pgDataSource = new org.postgresql.ds.PGSimpleDataSource()
+  pgDataSource.setDatabaseName(databaseName)
   pgDataSource.setUser(username)
   pgDataSource.setPassword(password)
   pgDataSource.setServerNames(Array(host))
   pgDataSource.setPortNumbers(Array(port))
+  logger.info(s"DB: $databaseName, User: $username, Pass: $password, Host: $host, port: $port")
 
   val config = new HikariConfig()
   config.setDataSource(pgDataSource)
