@@ -89,8 +89,8 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
           }
       }
       .flatMap {
-        case gsu @ GSignInEmail(email, _) if email == info.email => Task.now(gsu)
-        case _                                                   => Task.raiseError(UserNotFound)
+        case googleUser if googleUser.email == info.email => Task.now(googleUser)
+        case _                                            => Task.raiseError(UserNotFound)
       }
 
 }
