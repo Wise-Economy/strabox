@@ -29,7 +29,6 @@ class DBRepoImpl(ctx: PostgresMonixJdbcContext[CompositeNamingStrategy2[SnakeCas
   override def createUser(user: User): Task[UserId] = {
 
     import ctx._
-    implicit val insertUserMeta: ctx.InsertMeta[User] = insertMeta[User]()
 
     val insertedUserId = quote {
       querySchema[User]("strabo.user").insert(lift(User.strabo(UUID.randomUUID()))).returning(_.id)
@@ -39,7 +38,6 @@ class DBRepoImpl(ctx: PostgresMonixJdbcContext[CompositeNamingStrategy2[SnakeCas
 
   override def createSession(userId: UserId): Task[SessionId] = {
     import ctx._
-    implicit val insertUserSessionMeta: ctx.InsertMeta[UserSession] = insertMeta[UserSession]()
     val sessionId = quote {
       querySchema[UserSession]("strabo.session")
         .insert(
