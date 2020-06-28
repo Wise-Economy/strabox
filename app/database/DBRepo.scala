@@ -15,11 +15,17 @@ trait DBRepo {
 
   def createSession(userId: UserId): Task[SessionId]
 
-  def getSession(email: String): Task[SessionId]
+  def session(email: String): Task[SessionId]
 
   def isUserRegistered(email: String): Task[Boolean]
 
   def sessionExists(sessionId: UUID): Task[Boolean]
+
+  def userId(sessionId: SessionId): Task[UserId]
+
+  def user(userId: UUID): Task[User]
+
+  def invalidateSession(sessionId: SessionId): Task[Unit]
 }
 
 class DBRepoImpl(ctx: PostgresMonixJdbcContext[CompositeNamingStrategy2[SnakeCase.type, PostgresEscape.type]])(
@@ -70,7 +76,7 @@ class DBRepoImpl(ctx: PostgresMonixJdbcContext[CompositeNamingStrategy2[SnakeCas
     run(sessionFound)
   }
 
-  override def getSession(email: String): Task[SessionId] = {
+  override def session(email: String): Task[SessionId] = {
     import ctx._
     val validSession = quote {
       querySchema[User]("strabo.user")
@@ -86,5 +92,43 @@ class DBRepoImpl(ctx: PostgresMonixJdbcContext[CompositeNamingStrategy2[SnakeCas
       case Nil     => Task.raiseError(SessionNotFound)
       case id :: _ => Task.now(SessionId(id))
     }
+  }
+
+  override def userId(sessionId: SessionId): Task[UserId] = {
+    import ctx._
+    val userWithSession = quote {
+      querySchema[UserSession]("strabo.session")
+        .filter(_.id == lift(sessionId.id))
+        .take(1)
+        .map(_.userId)
+    }
+    run(userWithSession).flatMap {
+      case Nil       => Task.raiseError(UserNotFound)
+      case uuid :: _ => Task.now(UserId(uuid))
+    }
+  }
+
+  override def user(userId: UUID): Task[User] = {
+    import ctx._
+    val userQuery = quote {
+      querySchema[User]("strabo.user")
+        .filter(_.id == lift(userId))
+        .take(1)
+    }
+    run(userQuery).flatMap {
+      case Nil       => Task.raiseError(UserNotFound)
+      case user :: _ => Task.now(user)
+    }
+  }
+
+  override def invalidateSession(sessionId: SessionId): Task[Unit] = {
+    import ctx._
+    val now = LocalDateTime.now(ZoneId.of("UTC"))
+    val invalidateQuery = quote {
+      querySchema[UserSession]("strabo.session")
+        .filter(_.id == lift(sessionId.id))
+        .update(_.invalidatedAt -> lift(Some(now): Option[LocalDateTime]))
+    }
+    run(invalidateQuery).flatMap(_ => Task.unit)
   }
 }

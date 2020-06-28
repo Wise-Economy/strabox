@@ -4,11 +4,11 @@ import java.time.{LocalDateTime, ZoneId}
 import java.util.UUID
 
 import database.{DBRepo, User}
-import exceptions.UserNotFound
+import exceptions.{AuthenticationFailure, UserNotFound}
 import io.circe.generic.auto._
-import io.circe.parser
+import io.circe.{Encoder, Json, parser}
 import io.circe.syntax._
-import models.{GSignInEmail, UserEmailAndAccessToken, UserRegistrationDetails}
+import models.{GSignInEmail, SessionId, UserEmailAndAccessToken, UserId, UserProfile, UserRegistrationDetails}
 import monix.eval.Task
 import monix.execution.Scheduler
 import play.api.Environment
@@ -18,6 +18,7 @@ import play.api.libs.ws.ahc.AhcWSClient
 import play.api.mvc._
 
 import scala.concurrent.Future
+import scala.util.{Failure, Success, Try}
 
 class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
                                                             val environment: Environment,
@@ -44,7 +45,7 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
   def session(): Action[UserEmailAndAccessToken] = Action.async(circe.json[UserEmailAndAccessToken]) { req =>
     (for {
       verifiedUser <- verify(req.body)
-      sessionId <- dbRepo.getSession(verifiedUser.email)
+      sessionId <- dbRepo.session(verifiedUser.email)
     } yield Ok(sessionId.asJson)).onErrorRecover {
       case UserNotFound => NotFound
     }.runToFuture
@@ -70,6 +71,37 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
       case UserNotFound => NotFound
     }.runToFuture
   }
+
+  def userProfile(): Action[Json] = Action.async(circe.json) { req =>
+    withUserId(req) { userId =>
+      dbRepo
+        .user(userId.id)
+        .map(UserProfile.fromUser)
+    }.map(profile => Ok(profile.asJson))
+      .onErrorHandle {
+        case AuthenticationFailure => Unauthorized
+        case UserNotFound          => NotFound
+      }
+      .runToFuture
+  }
+
+  def logout(): Action[Json] = Action.async(circe.json) { req =>
+    withSessionId(req) { sessionId =>
+      dbRepo.invalidateSession(sessionId).map(_ => Ok(""))
+    }.runToFuture
+  }
+
+  private def withSessionId[A](req: Request[Json])(f: SessionId => Task[A]): Task[A] =
+    req.headers.get("sessionId") match {
+      case Some(sessionIdStr) =>
+        Try(UUID.fromString(sessionIdStr))
+          .fold(_ => Task.raiseError(AuthenticationFailure), id => Task.now(SessionId(id)))
+          .flatMap(f)
+      case None => Task.raiseError(AuthenticationFailure)
+    }
+
+  private def withUserId[A](req: Request[Json])(f: UserId => Task[A]): Task[A] =
+    withSessionId(req)(sessionId => dbRepo.userId(sessionId).flatMap(f))
 
   private def verify(info: UserEmailAndAccessToken): Task[GSignInEmail] =
     Task

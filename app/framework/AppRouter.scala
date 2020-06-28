@@ -1,7 +1,6 @@
 package framework
 
 import controllers.{Assets, HomeController}
-import io.getquill.{PostgresJdbcContext, SnakeCase}
 import play.api.routing.{Router, SimpleRouter}
 import play.api.routing.sird._
 
@@ -16,6 +15,10 @@ class AppRouter(homeController: HomeController, assetsController: Assets) extend
     case POST(p"/v1/session") => homeController.session()
 
     case POST(p"/v1/register") => homeController.register()
+
+    case GET(p"/v1/userProfile") => homeController.userProfile()
+
+    case GET(p"/v1/logout") => homeController.logout()
 
     // static resources
     case GET(p"/assets/$file*") =>
