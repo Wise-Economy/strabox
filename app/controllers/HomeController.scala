@@ -66,7 +66,7 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
           createdAt = LocalDateTime.now(ZoneId.of("UTC"))
         ))
       sessionId <- dbRepo.createSession(userId)
-    } yield Ok(sessionId.asJson)).onErrorHandle {
+    } yield Ok(sessionId.asJson)).onErrorRecover {
       case UserNotFound => NotFound
     }.runToFuture
   }
