@@ -15,7 +15,7 @@ class AppRouter(homeController: HomeController, assetsController: Assets) extend
 
     case POST(p"/v1/session") => homeController.session()
 
-    case POST(p"v1/register") => homeController.register()
+    case POST(p"/v1/register") => homeController.register()
 
     // static resources
     case GET(p"/assets/$file*") =>
