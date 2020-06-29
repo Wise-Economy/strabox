@@ -10,7 +10,7 @@ case class User(
     dob: LocalDate,
     phoneCountryCode: String,
     phoneNumber: String,
-    residenceCountryCode: String,
+    residenceCountry: String,
     photoUrl: String,
     createdAt: LocalDateTime
 )
@@ -24,14 +24,14 @@ object User {
     dob = LocalDate.now(),
     phoneCountryCode = "+91",
     phoneNumber = "123456789",
-    residenceCountryCode = "in",
+    residenceCountry = "in",
     photoUrl = "http://example.com",
     createdAt = LocalDateTime.now()
   )
 }
 
-case class UserSession(
-    id: UUID,
+case class AuthToken(
+    token: UUID,
     userId: UUID,
     createdAt: LocalDateTime,
     invalidatedAt: Option[LocalDateTime]

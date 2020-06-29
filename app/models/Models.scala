@@ -5,13 +5,7 @@ import java.util.UUID
 
 import database.User
 
-case class GSignInEmail(email: String)
-
-case class UserId(id: UUID) extends AnyVal
-
-case class SessionId(id: UUID) extends AnyVal
-
-case class UserEmailAndAccessToken(email: String, accessToken: String)
+case class HttpError(msg: String) extends AnyVal
 
 case class UserRegistrationDetails(
     name: String,
@@ -20,11 +14,11 @@ case class UserRegistrationDetails(
     dob: LocalDate,
     phoneCountryCode: String,
     phoneNumber: String,
-    residenceCountryCode: String,
+    residenceCountry: String,
     photoUrl: String
 )
 
-case class UserProfile(
+case class UserInfo(
     name: String,
     email: String,
     dob: LocalDate,
@@ -34,17 +28,25 @@ case class UserProfile(
     photoUrl: String
 )
 
-object UserProfile {
+object UserInfo {
 
-  def fromUser(user: User): UserProfile = {
-    UserProfile(
+  def fromUser(user: User): UserInfo = {
+    UserInfo(
       name = user.name,
       email = user.email,
       dob = user.dob,
       phoneCountryCode = user.phoneCountryCode,
       phoneNumber = user.phoneNumber,
-      residenceCountryCode = user.residenceCountryCode,
+      residenceCountryCode = user.residenceCountry,
       photoUrl = user.photoUrl
     )
   }
 }
+
+case class UserId(id: UUID) extends AnyVal
+
+case class AuthTokenValue(value: UUID) extends AnyVal
+
+case class UserEmailAndAccessToken(email: String, accessToken: String)
+
+case class GSignInEmail(email: String) extends AnyVal

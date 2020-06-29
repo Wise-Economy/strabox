@@ -10,13 +10,13 @@ class AppRouter(homeController: HomeController, assetsController: Assets) extend
 
     case GET(p"/") => homeController.index()
 
-    case POST(p"/v1/isRegisteredUser") => homeController.isRegisteredUser()
+    case POST(p"/v1/userExists") => homeController.userExists()
 
-    case POST(p"/v1/session") => homeController.session()
+    case POST(p"/v1/authToken") => homeController.authToken()
 
     case POST(p"/v1/register") => homeController.register()
 
-    case GET(p"/v1/userProfile") => homeController.userProfile()
+    case GET(p"/v1/user") => homeController.user()
 
     case GET(p"/v1/logout") => homeController.logout()
 

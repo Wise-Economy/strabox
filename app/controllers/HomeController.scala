@@ -4,7 +4,19 @@ import java.time.{LocalDateTime, ZoneId}
 import java.util.UUID
 
 import database.{DBRepo, User}
-import exceptions.{AuthenticationFailure, SessionNotFound, UserNotFound}
+import exceptions.{
+  AppError,
+  BadGoogleSignInAPIResponseCode,
+  GoogleSignInAPIJsonParsingFailed,
+  GoogleSignInVerificationFailed,
+  GoogleSignInVerificationFailedWithEmailMismatch,
+  NoSessionIdFoundInHeaders,
+  NoValidUserForGivenSession,
+  SessionIdParsingFailed,
+  SessionNotFoundForUserWithEmail,
+  UserWithGivenEmailNotFound,
+  UserWithGivenIdNotFound
+}
 import io.circe.generic.auto._
 import io.circe.parser
 import io.circe.syntax._
@@ -27,7 +39,7 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
     extends BaseController
     with CirceBodyParsers {
 
-  val logger = Logger("HomeController")
+  private val logger = Logger("HomeController")
 
   def index(): Action[AnyContent] = Action.async(parse.anyContent) { _ =>
     val userId = UUID.randomUUID()
@@ -37,22 +49,24 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
       .runToFuture
   }
 
-  def isRegisteredUser(): Action[UserEmailAndAccessToken] = Action.async(circe.json[UserEmailAndAccessToken]) { req =>
+  def userExists(): Action[UserEmailAndAccessToken] = Action.async(circe.json[UserEmailAndAccessToken]) { req =>
     (for {
       verifiedUser <- verify(req.body)
-      isRegistered <- dbRepo.isUserRegistered(verifiedUser.email)
-    } yield if (isRegistered) Ok("".asJson) else NotFound).onErrorRecover {
-      case UserNotFound => NotFound
-    }.runToFuture
+      exists <- dbRepo.userExists(verifiedUser.email)
+    } yield
+      if (exists) Status(OK)
+      else NotFound(HttpError(s"User with email: ${req.body.email} is not registered").asJson))
+      .handleAppError()
+      .runToFuture
   }
 
-  def session(): Action[UserEmailAndAccessToken] = Action.async(circe.json[UserEmailAndAccessToken]) { req =>
+  def authToken(): Action[UserEmailAndAccessToken] = Action.async(circe.json[UserEmailAndAccessToken]) { req =>
     (for {
       verifiedUser <- verify(req.body)
-      sessionId <- dbRepo.session(verifiedUser.email)
-    } yield Ok(sessionId.asJson)).onErrorRecover {
-      case UserNotFound => NotFound
-    }.runToFuture
+      sessionId <- dbRepo.authToken(verifiedUser.email)
+    } yield Ok(sessionId.asJson))
+      .handleAppError()
+      .runToFuture
   }
 
   def register(): Action[UserRegistrationDetails] = Action.async(circe.json[UserRegistrationDetails]) { req =>
@@ -66,47 +80,40 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
           dob = req.body.dob,
           phoneCountryCode = req.body.phoneCountryCode,
           phoneNumber = req.body.phoneNumber,
-          residenceCountryCode = req.body.residenceCountryCode,
+          residenceCountry = req.body.residenceCountry,
           photoUrl = req.body.photoUrl,
           createdAt = LocalDateTime.now(ZoneId.of("UTC"))
         ))
-      sessionId <- dbRepo.createSession(userId)
-    } yield Ok(sessionId.asJson)).onErrorRecover {
-      case UserNotFound => NotFound
-    }.runToFuture
+      sessionId <- dbRepo.createAuthToken(userId)
+    } yield Ok(sessionId.asJson))
+      .handleAppError()
+      .runToFuture
   }
 
-  def userProfile(): Action[AnyContent] = Action.async(parse.anyContent) { req =>
-    withSessionId(req) { userId =>
+  def user(): Action[AnyContent] = Action.async(parse.anyContent) { req =>
+    withAuthToken(req) { authToken =>
       dbRepo
-        .user(userId.id)
-        .map(UserProfile.fromUser)
+        .user(authToken.value)
+        .map(UserInfo.fromUser)
     }.map(profile => Ok(profile.asJson))
-      .onErrorHandle {
-        case AuthenticationFailure => Unauthorized
-        case SessionNotFound       => Unauthorized
-        case UserNotFound          => NotFound
-      }
+      .handleAppError()
       .runToFuture
   }
 
   def logout(): Action[AnyContent] = Action.async(parse.anyContent) { req =>
-    withSessionId(req) { sessionId =>
-      dbRepo.invalidateSession(sessionId).map(_ => Ok(""))
-    }.runToFuture
+    withAuthToken(req) { sessionId =>
+      dbRepo.invalidateAuthToken(sessionId).map(_ => Ok(""))
+    }.handleAppError().runToFuture
   }
 
-  private def withSessionId[A](req: Request[_])(f: SessionId => Task[A]): Task[A] =
-    req.headers.get("sessionId") match {
+  private def withAuthToken[A](req: Request[_])(f: AuthTokenValue => Task[A]): Task[A] =
+    req.headers.get("Auth-Token") match {
       case Some(sessionIdStr) =>
         Try(UUID.fromString(sessionIdStr))
-          .fold(_ => Task.raiseError(AuthenticationFailure), id => Task.now(SessionId(id)))
+          .fold(_ => Task.raiseError(SessionIdParsingFailed(sessionIdStr)), id => Task.now(AuthTokenValue(id)))
           .flatMap(f)
-      case None => Task.raiseError(AuthenticationFailure)
+      case None => Task.raiseError(NoSessionIdFoundInHeaders)
     }
-
-  private def withUserId[A](req: Request[_])(f: UserId => Task[A]): Task[A] =
-    withSessionId(req)(sessionId => dbRepo.userId(sessionId).flatMap(f))
 
   private def verify(info: UserEmailAndAccessToken): Task[GSignInEmail] =
     Task
@@ -121,14 +128,78 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
               case status if status >= 200 && status < 400 =>
                 parser
                   .decode[GSignInEmail](res.body)
-                  .fold(_ => Future.failed(new Exception("Json parsing failed")), Future.successful)
-              case _ => Future.failed(UserNotFound)
+                  .fold(_ => Future.failed(GoogleSignInAPIJsonParsingFailed), Future.successful)
+              case status if status == 400 => Future.failed(GoogleSignInVerificationFailed(info))
+              case status                  => Future.failed(BadGoogleSignInAPIResponseCode(status))
             }
           }
       }
       .flatMap {
         case googleUser if googleUser.email == info.email => Task.now(googleUser)
-        case _                                            => Task.raiseError(UserNotFound)
+        case googleUser =>
+          Task.raiseError(GoogleSignInVerificationFailedWithEmailMismatch(info, googleUser.email))
       }
+
+  implicit class TaskOps(task: Task[Result]) {
+
+    //noinspection ScalaStyle
+    def handleAppError(): Task[Result] =
+      task
+        .onErrorHandleWith { ex: Throwable =>
+          logger.error("Error occurred while serving reqs", ex)
+          Task.raiseError(ex)
+        }
+        .onErrorHandle {
+          case error: AppError =>
+            error match {
+              case GoogleSignInAPIJsonParsingFailed =>
+                InternalServerError(HttpError("Unknown error!").asJson)
+              case BadGoogleSignInAPIResponseCode(_) =>
+                InternalServerError(HttpError("Unknown error!").asJson)
+              case GoogleSignInVerificationFailed(info) =>
+                Unauthorized(HttpError(
+                  s"Google sign-in verification failed (Possibly expired) for email: ${info.email}, access token: ${info.accessToken
+                    .take(5)}...").asJson)
+
+              case GoogleSignInVerificationFailedWithEmailMismatch(_, _) =>
+                Unauthorized(HttpError(s"Google sign-in verification failed").asJson)
+              case SessionIdParsingFailed(sessionIdStr) =>
+                BadRequest(
+                  HttpError(
+                    s"Session id (sessionId): $sessionIdStr must be valid UUID"
+                  ).asJson
+                )
+              case NoSessionIdFoundInHeaders =>
+                BadRequest(
+                  HttpError(
+                    s"Session id (sessionId) is missing in request headers"
+                  ).asJson
+                )
+              case UserWithGivenEmailNotFound(email) =>
+                NotFound(
+                  HttpError(
+                    s"User with email: $email is not registered"
+                  ).asJson
+                )
+              case UserWithGivenIdNotFound(id) =>
+                NotFound(
+                  HttpError(
+                    "User involved in completing this request is not found"
+                  ).asJson
+                )
+              case NoValidUserForGivenSession(tokenValue) =>
+                Unauthorized(
+                  HttpError(s"Invalid session id: ${tokenValue.value}").asJson
+                )
+              case SessionNotFoundForUserWithEmail(email) =>
+                Unauthorized(
+                  HttpError(
+                    s"Session not found for user with email: $email"
+                  ).asJson
+                )
+            }
+          case _ => InternalServerError(HttpError("Unknown error!").asJson)
+        }
+  }
 
 }
