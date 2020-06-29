@@ -4,7 +4,7 @@ import java.time.{LocalDateTime, ZoneId}
 import java.util.UUID
 
 import database.{DBRepo, User}
-import exceptions.{AuthenticationFailure, UserNotFound}
+import exceptions.{AuthenticationFailure, SessionNotFound, UserNotFound}
 import io.circe.generic.auto._
 import io.circe.parser
 import io.circe.syntax._
@@ -77,13 +77,14 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
   }
 
   def userProfile(): Action[AnyContent] = Action.async(parse.anyContent) { req =>
-    withUserId(req) { userId =>
+    withSessionId(req) { userId =>
       dbRepo
         .user(userId.id)
         .map(UserProfile.fromUser)
     }.map(profile => Ok(profile.asJson))
       .onErrorHandle {
         case AuthenticationFailure => Unauthorized
+        case SessionNotFound       => Unauthorized
         case UserNotFound          => NotFound
       }
       .runToFuture
