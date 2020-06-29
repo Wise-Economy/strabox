@@ -6,9 +6,9 @@ import java.util.UUID
 import database.{DBRepo, User}
 import exceptions.{AuthenticationFailure, UserNotFound}
 import io.circe.generic.auto._
-import io.circe.{Encoder, Json, parser}
+import io.circe.parser
 import io.circe.syntax._
-import models.{GSignInEmail, SessionId, UserEmailAndAccessToken, UserId, UserProfile, UserRegistrationDetails}
+import models._
 import monix.eval.Task
 import monix.execution.Scheduler
 import play.api.Environment
@@ -18,7 +18,7 @@ import play.api.libs.ws.ahc.AhcWSClient
 import play.api.mvc._
 
 import scala.concurrent.Future
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
                                                             val environment: Environment,
@@ -39,7 +39,9 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
     (for {
       verifiedUser <- verify(req.body)
       isRegistered <- dbRepo.isUserRegistered(verifiedUser.email)
-    } yield if (isRegistered) Ok("") else NotFound).runToFuture
+    } yield if (isRegistered) Ok("".asJson) else NotFound).onErrorRecover {
+      case UserNotFound => NotFound
+    }.runToFuture
   }
 
   def session(): Action[UserEmailAndAccessToken] = Action.async(circe.json[UserEmailAndAccessToken]) { req =>
