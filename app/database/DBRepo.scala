@@ -37,7 +37,7 @@ class DBRepoImpl(ctx: PostgresMonixJdbcContext[CompositeNamingStrategy2[SnakeCas
     import ctx._
 
     val insertedUserId = quote {
-      querySchema[User]("strabo.user").insert(lift(User.strabo(UUID.randomUUID()))).returning(_.id)
+      querySchema[User]("strabo.user").insert(lift(user)).returning(_.id)
     }
     run(insertedUserId).map(UserId)
   }
