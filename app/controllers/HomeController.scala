@@ -11,7 +11,7 @@ import io.circe.syntax._
 import models._
 import monix.eval.Task
 import monix.execution.Scheduler
-import play.api.Environment
+import play.api.{Environment, Logger}
 import play.api.libs.circe.CirceBodyParsers
 import play.api.libs.ws.WSResponse
 import play.api.libs.ws.ahc.AhcWSClient
@@ -26,6 +26,8 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
                                                             val controllerComponents: ControllerComponents)
     extends BaseController
     with CirceBodyParsers {
+
+  val logger = Logger("HomeController")
 
   def index(): Action[AnyContent] = Action.async(parse.anyContent) { _ =>
     val userId = UUID.randomUUID()
@@ -113,6 +115,7 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
           .addQueryStringParameters("access_token" -> info.accessToken)
           .get()
           .flatMap { res: WSResponse =>
+            logger.info(s"Verifying $info, status: ${res.status} and response: ${res.json}")
             res.status match {
               case status if status >= 200 && status < 400 =>
                 parser
