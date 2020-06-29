@@ -72,7 +72,7 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
     }.runToFuture
   }
 
-  def userProfile(): Action[Json] = Action.async(circe.json) { req =>
+  def userProfile(): Action[AnyContent] = Action.async(parse.anyContent) { req =>
     withUserId(req) { userId =>
       dbRepo
         .user(userId.id)
@@ -85,13 +85,13 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
       .runToFuture
   }
 
-  def logout(): Action[Json] = Action.async(circe.json) { req =>
+  def logout(): Action[AnyContent] = Action.async(parse.anyContent) { req =>
     withSessionId(req) { sessionId =>
       dbRepo.invalidateSession(sessionId).map(_ => Ok(""))
     }.runToFuture
   }
 
-  private def withSessionId[A](req: Request[Json])(f: SessionId => Task[A]): Task[A] =
+  private def withSessionId[A](req: Request[_])(f: SessionId => Task[A]): Task[A] =
     req.headers.get("sessionId") match {
       case Some(sessionIdStr) =>
         Try(UUID.fromString(sessionIdStr))
@@ -100,7 +100,7 @@ class HomeController(wsClient: AhcWSClient, dbRepo: DBRepo)(implicit
       case None => Task.raiseError(AuthenticationFailure)
     }
 
-  private def withUserId[A](req: Request[Json])(f: UserId => Task[A]): Task[A] =
+  private def withUserId[A](req: Request[_])(f: UserId => Task[A]): Task[A] =
     withSessionId(req)(sessionId => dbRepo.userId(sessionId).flatMap(f))
 
   private def verify(info: UserEmailAndAccessToken): Task[GSignInEmail] =
