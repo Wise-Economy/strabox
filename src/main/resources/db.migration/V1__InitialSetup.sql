@@ -20,7 +20,50 @@ CREATE TABLE strabo.auth_tokens (
 );
 
 CREATE TABLE strabo.accounts (
-    id              UUID PRIMARY KEY,
-    name            VARCHAR (255) NOT NULL,
-    bankAccountId   VARCHAR (255)
+    id                UUID PRIMARY KEY,
+    name              VARCHAR (255) NOT NULL,
+    bankAccountId     VARCHAR (255) NOT NULL,
+    currency          CHARACTER (10) NOT NULL,
+    balance           DECIMAL NOT NULL,
+    accountNature     VARCHAR (255) NOT NULL,
+    accountHolderName VARCHAR (255) NOT NULL,
+    availableMoney    DECIMAL NOT NULL,
+    customerId        UUID NOT NULL REFERENCES strabo.customers (id),
+    userId            UUID NOT NULL REFERENCES strabo.users (id),
+    userConnectionId  UUID NOT NULL REFERENCES strabo.userConnections (id),
+    createdAt         TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+CREATE TABLE strabo.bankCustomers (
+    id               UUID PRIMARY KEY,
+    firstName        VARCHAR (255) NOT NULL,
+    lastName         VARCHAR (255) NOT NULL,
+    middleName       VARCHAR (255),
+    email            VARCHAR (255) NOT NULL,
+    phoneNumber      VARCHAR (20) NOT NULL,
+    originCountry    VARCHAR (20) NOT NULL,
+    accountType      VARCHAR (20) NOT NULL,
+    residenceCountry VARCHAR (255) NOT NULL,
+    address          VARCHAR (255) NOT NULL,
+    createdAt        TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE TABLE Countries (
+
+);
+
+CREATE TABLE strabo.userConnections (
+
+);
+
+CREATE TABLE strabo.transactions (
+    id              UUID PRIMARY KEY,
+    transactionId   VARCHAR (255) NOT NULL UNIQUE,
+    status          VARCHAR (255) NOT NULL,
+    currency        VARCHAR (10) NOT NULL,
+    transactionAmount DECIMAL NOT NULL,
+    description       VARCHAR (255),
+    category          VARCHAR (255) NOT NULL,
+    transactionMode   VARCHAR (255) NOT NULL
+);
+
