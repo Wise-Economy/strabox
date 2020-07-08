@@ -4,8 +4,8 @@ import com.wiseeconomy.db.*
 import com.wiseeconomy.domain.*
 import mu.KotlinLogging
 import org.flywaydb.core.Flyway
-import org.gradle.sample.db.*
-import org.gradle.sample.domain.*
+import com.wiseeconomy.db.*
+import com.wiseeconomy.domain.*
 import org.http4k.client.ApacheClient
 import org.http4k.contract.*
 import org.http4k.core.Method.GET
