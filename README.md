@@ -1,2 +1,0 @@
-# strabox
-strabo backend
