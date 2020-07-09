@@ -48,11 +48,9 @@ object HeaderLens {
 }
 
 object BodyLens {
-
     val email = Body.auto<ServerResponseBody<Email>>().toLens()
     val user = Body.auto<ServerResponseBody<User>>().toLens()
     val authToken = Body.auto<ServerResponseBody<AuthTokenValue>>().toLens()
-
 }
 
 fun main() {
@@ -69,8 +67,9 @@ fun main() {
 
     logger.info { "Loaded application config: $config" }
 
-    val dataSource = AppDataSource.fromConfig(config.db)
+    //val dataSource = AppDataSource.fromConfig(config.db)
 
+    val dataSource = AppDataSource.fromDatabaseUrl(System.getenv("DATABASE_URL"))
     //Flyway.configure().dataSource(dataSource).load().migrate()
 
     val database: Database = Database.connect(dataSource)
@@ -123,7 +122,7 @@ fun main() {
     audit.then(globalErrorHandler)
             .then(ResponseFilters.GZip())
             .then(app)
-            .asServer(Jetty(9000)).start().block()
+            .asServer(Jetty(config.app.port)).start().block()
 }
 
 class Controller(val dao: DAO) {

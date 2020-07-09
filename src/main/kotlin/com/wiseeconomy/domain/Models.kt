@@ -1,11 +1,7 @@
 package com.wiseeconomy.domain
 
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.util.*
-
-data class UserId(val id: UUID)
-
 
 data class AuthTokenValue(val token: UUID) {
     companion object {

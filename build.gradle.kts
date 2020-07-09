@@ -5,7 +5,7 @@ plugins {
     kotlin("jvm") version "1.3.72"
 }
 
-version = "1.0.2"
+version = "1.0.0"
 group = "com.wiseeconomy"
 
 application {
